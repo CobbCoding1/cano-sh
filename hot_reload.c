@@ -1,11 +1,9 @@
 #include <dlfcn.h>
 #include <locale.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-
-#include <ncurses.h>
 
 #include "cano_sh.h"
 
@@ -74,7 +72,7 @@ void run_command(Repl *this, struct sh *shell, char const *fmt, ...)
     va_list ap;
 
     va_start(ap, fmt);
-    vsnprintf(this->input, sizeof cmd, fmt, ap);
+    vsnprintf(this->input.data, sizeof cmd, fmt, ap);
     va_end(ap);
 	shell->eval(this);
 }
@@ -97,7 +95,7 @@ init:
 			return EXIT_FAILURE;
 		if (!this->is_running)
 			break;
-		if (!strcmp(this->input, "reload")) {
+		if (!strcmp(this->input.data, "reload")) {
 			run_command(this, shell, "make %s", binname);
 			goto init;
 		}

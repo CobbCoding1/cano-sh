@@ -4,10 +4,10 @@
     #include <stdbool.h>
     #include <stddef.h>
 
-    #include <ncurses.h>
-
     #define DATA_START_CAPACITY 128
-    #define SSTR_LEN(sstr) (sizeof(sstr) - 1)
+
+    #define sstr_len(sstr) (sizeof(sstr) - 1)
+    #define sstr_unpack(sstr) (sstr), sstr_len((sstr))
 
     #define ASSERT(cond, ...) \
         do { \
@@ -58,7 +58,7 @@ typedef struct {
 } Strings;
 
 typedef struct shell_repl_s {
-	char *input;
+	String input;
 	String clipboard;
     bool is_running;
 } Repl;

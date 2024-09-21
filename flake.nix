@@ -8,7 +8,7 @@
   in {
     devShells.${system}.default = pkgs.mkShell {
       hardeningDisable = ["format" "fortify"];
-      packages = with pkgs; [ gcc bear valgrind ncurses readline ];
+      packages = with pkgs; [ gcc bear valgrind ncurses ];
     };
   };
 }
