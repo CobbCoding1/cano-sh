@@ -114,6 +114,29 @@ one_more_time:
             if (repl->col < repl->input.count)
                 repl->col++;
 			goto move_cursor;
+		case ctrl('k'):
+			repl->input.count = repl->col;
+			repl->input.data[repl->input.count] = '\0';
+            printf("\033[%ldG\033[0J",
+				sstr_len(SHELL_PROMPT) + 1 + repl->col);
+			break;
+			//goto move_cursor;
+		case ctrl('u'):
+			memmove(
+				repl->input.data,
+				&repl->input.data[repl->col],
+				repl->input.count - repl->col
+			);
+			repl->input.count = repl->input.count - repl->col;
+			repl->input.data[repl->input.count] = '\0';
+			repl->col = 0;
+            printf("\033[%ldG\033[0J%s",
+				sstr_len(SHELL_PROMPT) + 1 + repl->col,
+				repl->input.data);
+			goto move_cursor;
+			break;
+		case ctrl('y'):
+			goto move_cursor;
         case ctrl('e'):
             repl->col = repl->input.count;
 			goto move_cursor;
