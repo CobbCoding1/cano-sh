@@ -18,7 +18,7 @@ static const Repl REPL_INIT = { .is_running = true };
 #define export __attribute__((visibility("default")))
 
 bool export shell_repl_initialize(Repl *repl) {
-	struct termios term;
+	struct termios settings;
     String input = {
 		.data = malloc(INITIAL_INPUT_CAPACITY * sizeof(char)),
 		.capacity = INITIAL_INPUT_CAPACITY,
@@ -30,9 +30,11 @@ bool export shell_repl_initialize(Repl *repl) {
 	*repl = REPL_INIT;
 	repl->input = input;
 
-	tcgetattr(STDIN_FILENO, &term);
-	term.c_lflag &= ~(ECHO | ICANON);
-	tcsetattr(STDIN_FILENO, TCSAFLUSH, &term);
+    tcgetattr(STDIN_FILENO, &settings);
+    repl->init_settings = settings;
+    settings.c_iflag &= ~(IXON);
+    settings.c_lflag &= ~(ECHO | ICANON);
+    tcsetattr(STDIN_FILENO, TCSANOW, &settings);
 
 	return true;
 }
@@ -40,6 +42,7 @@ bool export shell_repl_initialize(Repl *repl) {
 
 void export shell_cleanup(Repl *repl)
 {
+	tcsetattr(STDIN_FILENO, TCSANOW, &repl->init_settings);
 	free(repl->input.data);
 }
 
@@ -69,6 +72,13 @@ bool handle_shortcuts(Repl *repl, char c)
 		case '\033': /* alternative keys */
 			(void)read(STDIN_FILENO, buf, sizeof buf);
 			break;
+
+        case ctrl('d'):
+        case ctrl('q'):
+            repl->is_running = false;
+            write(STDOUT_FILENO, sstr_unpack("exit\n"));
+            return true;
+
 		default:
 			if (!string_ensure_capacity(&repl->input))
 				return false;
@@ -87,7 +97,7 @@ bool export shell_readline(Repl *repl)
 	repl->input.count = 0;
 	memset(repl->input.data, '\0', repl->input.capacity);
 	write(STDOUT_FILENO, sstr_unpack(SHELL_PROMPT));
-	while (c != '\n') {
+	while (c != '\n' && repl->is_running) {
 		if (read(STDIN_FILENO, &c, 1) <= 0)
 			return false;
 		if (!handle_shortcuts(repl, c))
