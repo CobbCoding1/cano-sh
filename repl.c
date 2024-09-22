@@ -36,6 +36,7 @@ bool export shell_repl_initialize(Repl *repl) {
     settings.c_lflag &= ~(ECHO | ICANON);
     tcsetattr(STDIN_FILENO, TCSANOW, &settings);
 
+	setbuf(stdout, NULL);
 	return true;
 }
 
@@ -66,12 +67,44 @@ bool string_ensure_capacity(String *s)
 static
 bool handle_shortcuts(Repl *repl, char c)
 {
+	int received;
 	char buf[32]; /* Limit of \e sequences is unkown, this is probably fine */
 
+one_more_time:
 	switch (c) {
 		case '\033': /* alternative keys */
-			(void)read(STDIN_FILENO, buf, sizeof buf);
-			break;
+			received = read(STDIN_FILENO, buf, sizeof buf);
+			printf("[%s]", buf);
+
+			if (received == sstr_len("[?") && *buf == '[') {
+				if (buf[1] == 'C')
+					c = ctrl('f');
+				if (buf[1] == 'D')
+					c = ctrl('b');
+			}
+
+			if (c == '\033')
+				break;
+
+			goto one_more_time;
+
+        case ctrl('a'):
+            repl->col = 0;
+			goto move_cursor;
+        case ctrl('b'):
+            if (repl->col > 0)
+                repl->col--;
+			goto move_cursor;
+        case ctrl('f'):
+            if (repl->col < repl->input.count)
+                repl->col++;
+			goto move_cursor;
+        case ctrl('e'):
+            repl->col = repl->input.count;
+			goto move_cursor;
+        case ctrl('l'):
+            printf("\033[2J\033[H%s%s", SHELL_PROMPT, repl->input.data);
+            break;
 
         case ctrl('d'):
         case ctrl('q'):
@@ -79,13 +112,31 @@ bool handle_shortcuts(Repl *repl, char c)
             write(STDOUT_FILENO, sstr_unpack("exit\n"));
             return true;
 
+		case '\n':
+			repl->col = 0;
+            printf("\n\033[0G");
+			break;
 		default:
 			if (!string_ensure_capacity(&repl->input))
 				return false;
-			repl->input.data[repl->input.count++] = c;
-			__attribute__((fallthrough));
-		case '\n':
+            if (repl->col != repl->input.count)
+				memmove(
+                    &repl->input.data[repl->col + 1],
+                    &repl->input.data[repl->col],
+                    repl->input.count - repl->col
+                );
+            repl->input.data[repl->col++] = c;
+            repl->input.count++;
 			write(STDOUT_FILENO, &c, sizeof c);
+			if (repl->col != repl->input.count) {
+				write(STDOUT_FILENO,
+					&repl->input.data[repl->col],
+					repl->input.count - repl->col
+				);
+			}
+move_cursor:
+			printf("\033[%ldG", sstr_len(SHELL_PROMPT) + 1 + repl->col);
+			break;
 	}
 	return true;
 }

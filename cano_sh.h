@@ -62,6 +62,7 @@ typedef struct shell_repl_s {
 	String input;
 	String clipboard;
     struct termios init_settings;
+    size_t col;
     bool is_running;
 } Repl;
 
