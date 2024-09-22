@@ -44,6 +44,23 @@ void export shell_cleanup(Repl *repl)
 }
 
 static
+bool string_ensure_capacity(String *s)
+{
+	char *transaction;
+
+	if (s->count < s->capacity)
+		return true;
+	if (s == NULL || s->capacity > (1 << 16)) /* enough for a human */
+		return false;
+	transaction = realloc(s->data, (s->capacity << 1) * sizeof(char));
+	if (transaction == NULL)
+		return free(s->data), NULL;
+	s->data = transaction;
+	s->capacity <<= 1;
+	return true;
+}
+
+static
 bool handle_shortcuts(Repl *repl, char c)
 {
 	char buf[32]; /* Limit of \e sequences is unkown, this is probably fine */
@@ -53,6 +70,8 @@ bool handle_shortcuts(Repl *repl, char c)
 			(void)read(STDIN_FILENO, buf, sizeof buf);
 			break;
 		default:
+			if (!string_ensure_capacity(&repl->input))
+				return false;
 			repl->input.data[repl->input.count++] = c;
 			__attribute__((fallthrough));
 		case '\n':
