@@ -68,25 +68,40 @@ static
 bool handle_shortcuts(Repl *repl, char c)
 {
 	int received;
-	char buf[32]; /* Limit of \e sequences is unkown, this is probably fine */
+	char buf[32] = { '\0' }; /* Limit of \e sequences is undefined */
 
 one_more_time:
 	switch (c) {
 		case '\033': /* alternative keys */
 			received = read(STDIN_FILENO, buf, sizeof buf);
-			printf("[%s]", buf);
-
-			if (received == sstr_len("[?") && *buf == '[') {
+			if (received > 1 && *buf == '[') {
 				if (buf[1] == 'C')
 					c = ctrl('f');
 				if (buf[1] == 'D')
 					c = ctrl('b');
+				if (buf[1] == '3' && buf[2] == '~')
+					break; /* this is supr key */
 			}
 
 			if (c == '\033')
 				break;
 
 			goto one_more_time;
+
+		case 127: /* delete key */
+			if (repl->col > 0) {
+				repl->col--;
+				memmove(
+                    &repl->input.data[repl->col],
+                    &repl->input.data[repl->col + 1],
+                    repl->input.count - repl->col
+                );
+				repl->input.count--;
+			}
+            printf("\033[%ldG\033[0J%s",
+				sstr_len(SHELL_PROMPT) + 1 + repl->col,
+				&repl->input.data[repl->col]);
+			break;
 
         case ctrl('a'):
             repl->col = 0;
