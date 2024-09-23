@@ -8,6 +8,10 @@
 
 #include "cano_sh.h"
 
+#ifdef USE_READLINE
+	#include <readline/readline.h>
+#endif
+
 #define ctrl(x) ((x) & 0x1f)
 
 static const char SHELL_PROMPT[] = "[canosh]$ ";
@@ -18,6 +22,7 @@ static const Repl REPL_INIT = { .is_running = true };
 #define export __attribute__((visibility("default")))
 
 bool export shell_repl_initialize(Repl *repl) {
+#ifndef USE_READLINE
 	struct termios settings;
     String input = {
 		.data = malloc(INITIAL_INPUT_CAPACITY * sizeof(char)),
@@ -27,26 +32,29 @@ bool export shell_repl_initialize(Repl *repl) {
 	if (input.data == NULL)
 		return false;
 
+	tcgetattr(STDIN_FILENO, &settings);
+	settings.c_iflag &= ~(IXON);
+	settings.c_lflag &= ~(ECHO | ICANON);
+	tcsetattr(STDIN_FILENO, TCSANOW, &settings);
+#endif
 	*repl = REPL_INIT;
+#ifndef USE_READLINE
 	repl->input = input;
-
-    tcgetattr(STDIN_FILENO, &settings);
-    repl->init_settings = settings;
-    settings.c_iflag &= ~(IXON);
-    settings.c_lflag &= ~(ECHO | ICANON);
-    tcsetattr(STDIN_FILENO, TCSANOW, &settings);
-
+	repl->init_settings = settings;
+#endif
 	setbuf(stdout, NULL);
 	return true;
 }
 
-
 void export shell_cleanup(Repl *repl)
 {
+#ifndef USE_READLINE
 	tcsetattr(STDIN_FILENO, TCSANOW, &repl->init_settings);
+#endif
 	free(repl->input.data);
 }
 
+#ifndef USE_READLINE
 static
 bool string_ensure_capacity(String *s)
 {
@@ -178,9 +186,20 @@ move_cursor:
 	}
 	return true;
 }
+#endif
 
 bool export shell_readline(Repl *repl)
 {
+#ifdef USE_READLINE
+	repl->input.data = readline(SHELL_PROMPT);
+
+	// sending `^D` will cause readline to return NULL
+	if (repl->input.data == NULL) {
+		printf("\033[1F\033[%ldCexit\n", sstr_len(SHELL_PROMPT));
+		repl->is_running = false;
+		return false;
+	}
+#else
 	char c = '\0';
 
 	repl->input.count = 0;
@@ -192,6 +211,7 @@ bool export shell_readline(Repl *repl)
 		if (!handle_shortcuts(repl, c))
 			return false;
 	}
+#endif
 	return true;
 }
 

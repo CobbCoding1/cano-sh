@@ -9,14 +9,18 @@ endif
 CFLAGS += -MMD -MP
 CFLAGS += -O2
 
-LDLIBS =
+ifeq ($(USE_READLINE),1)
+CFLAGS += -DUSE_READLINE=1
+LDLIBS = -lreadline
+
+BUILD_DIR = .build/@readline
+endif
 
 VPATH := .
 SRC-OUT := main.c
 SRC-OUT += repl.c
 
 vpath %.c $(VPATH)
-
 
 # $(eval $(call _mk-recipe-obj, ...))
 # args: binary-name, src-list, extra-flags, is_shared

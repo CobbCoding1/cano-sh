@@ -59,9 +59,16 @@ typedef struct {
 } Strings;
 
 typedef struct shell_repl_s {
+#ifdef USE_READLINE
+    /* Simplify readline implementation by keeping `repl->input.data` API */
+	union {
+        char *data;
+    } input;
+#else
 	String input;
 	String clipboard;
     struct termios init_settings;
+#endif
     size_t col;
     bool is_running;
 } Repl;
