@@ -105,12 +105,12 @@ one_more_time:
                     repl->input.count - repl->col
                 );
 				repl->input.count--;
+				printf("\033[%ldG\033[0J%s\033[%ldG",
+					sstr_len(SHELL_PROMPT) + 1 + repl->col,
+					&repl->input.data[repl->col],
+					sstr_len(SHELL_PROMPT) + 1 + repl->col);
 			}
-            printf("\033[%ldG\033[0J%s",
-				sstr_len(SHELL_PROMPT) + 1 + repl->col,
-				&repl->input.data[repl->col]);
 			break;
-
         case ctrl('a'):
             repl->col = 0;
 			goto move_cursor;
@@ -128,7 +128,6 @@ one_more_time:
             printf("\033[%ldG\033[0J",
 				sstr_len(SHELL_PROMPT) + 1 + repl->col);
 			break;
-			//goto move_cursor;
 		case ctrl('u'):
 			memmove(
 				repl->input.data,
