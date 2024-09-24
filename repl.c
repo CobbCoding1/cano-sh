@@ -33,6 +33,7 @@ bool export shell_repl_initialize(Repl *repl) {
 		return false;
 
 	tcgetattr(STDIN_FILENO, &settings);
+	repl->init_settings = settings;
 	settings.c_iflag &= ~(IXON);
 	settings.c_lflag &= ~(ECHO | ICANON);
 	tcsetattr(STDIN_FILENO, TCSANOW, &settings);
@@ -40,7 +41,6 @@ bool export shell_repl_initialize(Repl *repl) {
 	*repl = REPL_INIT;
 #ifndef USE_READLINE
 	repl->input = input;
-	repl->init_settings = settings;
 #endif
 	setbuf(stdout, NULL);
 	return true;
@@ -87,8 +87,21 @@ one_more_time:
 					c = ctrl('f');
 				if (buf[1] == 'D')
 					c = ctrl('b');
-				if (buf[1] == '3' && buf[2] == '~')
-					break; /* this is supr key */
+				if (buf[1] == '3' && buf[2] == '~') {
+					if(repl->input.count > 0 && repl->col < repl->input.count) {
+						memmove(
+		                    &repl->input.data[repl->col],
+		                    &repl->input.data[repl->col + 1],
+		                    repl->input.count - repl->col
+		                );
+						repl->input.count--;
+						printf("\033[%ldG\033[0J%s\033[%ldG",
+							sstr_len(SHELL_PROMPT) + 1 + repl->col,
+							&repl->input.data[repl->col],
+							sstr_len(SHELL_PROMPT) + 1 + repl->col);
+						break; /* this is supr key */
+					}
+				}
 			}
 
 			if (c == '\033')
