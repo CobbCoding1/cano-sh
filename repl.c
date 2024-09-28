@@ -41,6 +41,10 @@ bool export shell_repl_initialize(Repl *repl) {
 	settings.c_iflag &= ~(IXON);
 	settings.c_lflag &= ~(ECHO | ICANON);
 	tcsetattr(STDIN_FILENO, TCSANOW, &settings);
+	repl->clipboard.data = malloc(INITIAL_INPUT_CAPACITY * sizeof(char));
+	if (repl->clipboard.data == NULL)
+		return false;
+	repl->clipboard.capacity = INITIAL_INPUT_CAPACITY;
 #endif
 	setbuf(stdout, NULL);
 	return true;
@@ -50,6 +54,7 @@ void export shell_cleanup(Repl *repl)
 {
 #ifndef USE_READLINE
 	tcsetattr(STDIN_FILENO, TCSANOW, &repl->init_settings);
+	free(repl->clipboard.data);
 #endif
 	free(repl->input.data);
 }
@@ -59,16 +64,21 @@ static
 bool string_ensure_capacity(String *s)
 {
 	char *transaction;
+	size_t target_capacity = s->capacity;
 
 	if (s->count < s->capacity)
 		return true;
-	if (s == NULL || s->capacity > (1 << 16)) /* enough for a human */
+	if (s == NULL)
 		return false;
-	transaction = realloc(s->data, (s->capacity << 1) * sizeof(char));
+	for (; target_capacity < s->count; )
+		target_capacity <<= 1;
+	if (target_capacity > (1 << 16)) /* enough for a human */
+		return false;
+	transaction = realloc(s->data, target_capacity * sizeof(char));
 	if (transaction == NULL)
 		return free(s->data), NULL;
 	s->data = transaction;
-	s->capacity <<= 1;
+	s->capacity = target_capacity;
 	return true;
 }
 
@@ -136,12 +146,28 @@ one_more_time:
                 repl->col++;
 			goto move_cursor;
 		case ctrl('k'):
+			if (repl->col < repl->input.count) {
+				repl->clipboard.count = repl->input.count - repl->col;
+				if (!string_ensure_capacity(&repl->clipboard))
+					return false;
+				memcpy(
+					repl->clipboard.data,
+					&repl->input.data[repl->col],
+					repl->input.count - repl->col
+				);
+			}
 			repl->input.count = repl->col;
 			repl->input.data[repl->input.count] = '\0';
             printf("\033[%ldG\033[0J",
 				sstr_len(SHELL_PROMPT) + 1 + repl->col);
 			break;
 		case ctrl('u'):
+			if (repl->col > 0) {
+				repl->clipboard.count = repl->col;
+				if (!string_ensure_capacity(&repl->clipboard))
+					return false;
+				memcpy(repl->clipboard.data, repl->input.data, repl->col);
+			}
 			memmove(
 				repl->input.data,
 				&repl->input.data[repl->col],
@@ -156,7 +182,22 @@ one_more_time:
 			goto move_cursor;
 			break;
 		case ctrl('y'):
+			repl->input.count += repl->clipboard.count;
+			if (!string_ensure_capacity(&repl->input))
+				return false;
+			memmove(
+				&repl->input.data[repl->col + repl->clipboard.count],
+				&repl->input.data[repl->col], repl->clipboard.count);
+			memcpy(&repl->input.data[repl->col],
+				repl->clipboard.data, repl->clipboard.count);
+
+			write(STDOUT_FILENO,
+				&repl->input.data[repl->col],
+				repl->input.count - repl->col
+			);
+			repl->col += repl->clipboard.count;
 			goto move_cursor;
+			break;
         case ctrl('e'):
             repl->col = repl->input.count;
 			goto move_cursor;
