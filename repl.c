@@ -55,6 +55,9 @@ void export shell_cleanup(Repl *repl)
 #ifndef USE_READLINE
 	tcsetattr(STDIN_FILENO, TCSANOW, &repl->init_settings);
 	free(repl->clipboard.data);
+	for (size_t i = 0; i < repl->hist.count; i++)
+		free(repl->hist.data[i].data);
+	free(repl->hist.data);
 #endif
 	free(repl->input.data);
 }
@@ -93,6 +96,25 @@ one_more_time:
 		case '\033': /* alternative keys */
 			received = read(STDIN_FILENO, buf, sizeof buf);
 			if (received > 1 && *buf == '[') {
+				if (buf[1] == 'A') {
+					if (repl->hist_idx <= 0)
+						break;
+					repl->hist_idx--;
+					repl->input.count = repl->hist.data[repl->hist_idx - 1].count;
+					if (!string_ensure_capacity(&repl->input))
+						return false;
+					repl->col = repl->input.count;
+					memcpy(
+						repl->input.data,
+						repl->hist.data[repl->hist_idx - 1].data,
+						repl->hist.data[repl->hist_idx - 1].count
+					);
+					printf("\033[%ldG\033[0J%s\033[%ldG",
+							sstr_len(SHELL_PROMPT) + 1,
+							repl->input.data,
+							sstr_len(SHELL_PROMPT) + 1 + repl->col);
+					break;
+				}
 				if (buf[1] == 'C')
 					c = ctrl('f');
 				if (buf[1] == 'D')
@@ -281,8 +303,19 @@ bool export shell_evaluate(Repl *repl)
 	args = parse_command(repl->input.data);
 	if (args == NULL)
 		return false;
-	handle_command(args);
-	//DA_APPEND(&repl->command_his, repl->input);
+#ifndef USE_READLINE
+	String s = {
+		.data = malloc(repl->input.count * sizeof(char)),
+		.count = repl->input.count
+	};
+
+	if (s.data == NULL)
+		return false;
+	memcpy(s.data, repl->input.data, repl->input.count);
+	DA_APPEND(&repl->hist, s);
+	repl->hist_idx = repl->hist.count;
+#endif
+	handle_command(repl, args);
 	free(args);
 	return true;
 }
