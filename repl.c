@@ -33,14 +33,14 @@ bool export shell_repl_initialize(Repl *repl) {
 		return false;
 
 	tcgetattr(STDIN_FILENO, &settings);
-	repl->init_settings = settings;
-	settings.c_iflag &= ~(IXON);
-	settings.c_lflag &= ~(ECHO | ICANON);
-	tcsetattr(STDIN_FILENO, TCSANOW, &settings);
 #endif
 	*repl = REPL_INIT;
 #ifndef USE_READLINE
 	repl->input = input;
+	repl->init_settings = settings;
+	settings.c_iflag &= ~(IXON);
+	settings.c_lflag &= ~(ECHO | ICANON);
+	tcsetattr(STDIN_FILENO, TCSANOW, &settings);
 #endif
 	setbuf(stdout, NULL);
 	return true;
